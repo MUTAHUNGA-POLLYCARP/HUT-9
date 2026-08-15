@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard - HUT 9</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="dashboard-body">
+
+  <!-- Dashboard Navigation -->
+  <nav class="navbar">
+    <div class="logo">HUT 9</div>
+    <div class="auth-controls">
+      <span id="user-greeting">Welcome!</span>
+      <button onclick="logoutUser()" class="btn-logout">Logout</button>
+    </div>
+  </nav>
+
+  <!-- Dashboard Main Container -->
+  <main class="dashboard-container">
+    
+    <!-- Account Wallet Card -->
+    <section class="wallet-card">
+      <h2>Account Wallet</h2>
+      <div class="wallet-info">
+        <p class="label">Total Balance:</p>
+        <h3 id="dash-balance">UGX 0</h3>
+        <p class="label">Estimated Daily Profit:</p>
+        <p class="profit" id="dash-profit">+ UGX 0 / day</p>
+      </div>
+      <div class="button-group">
+        <button class="btn-deposit" onclick="handleDeposit()">Deposit</button>
+        <button class="btn-withdraw" onclick="handleWithdraw()">Withdraw</button>
+      </div>
+    </section>
+
+    <!-- Active Investments Summary -->
+    <section class="dashboard-stats">
+      <div class="stat-box">
+        <h4>Active Machines</h4>
+        <p id="active-count">0</p>
+      </div>
+      <div class="stat-box">
+        <h4>Total Earned</h4>
+        <p id="total-earnings">UGX 0</p>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="script.js"></script>
+  <script>
+    // Protect page: Redirect to login if user token is missing
+    document.addEventListener('DOMContentLoaded', () => {
+      const user = JSON.parse(localStorage.getItem('user'));
+      const token = localStorage.getItem('token');
+
+      if (!token || !user) {
+        alert('Please log in first.');
+        window.location.href = 'login.html';
+        return;
+      }
+
+      // Populate user info
+      document.getElementById('user-greeting').textContent = `Hello, ${user.username}!`;
+      document.getElementById('dash-balance').textContent = `UGX ${user.balance || 0}`;
+    });
+  </script>
+  <!-- Deposit Modal -->
+<div id="deposit-modal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <span class="close-btn" onclick="closeDepositModal()">&times;</span>
+    <h3>Deposit via Mobile Money</h3>
+    
+    <div class="form-group">
+      <label for="dep-phone">Phone Number</label>
+      <input type="text" id="dep-phone" placeholder="e.g. 0771234567" required />
+    </div>
+
+    <div class="form-group">
+      <label for="dep-network">Network</label>
+      <select id="dep-network">
+        <option value="MTN">MTN Mobile Money</option>
+        <option value="AIRTEL">Airtel Money</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="dep-amount">Amount (UGX)</label>
+      <input type="number" id="dep-amount" placeholder="e.g. 10000" min="500" required />
+    </div>
+
+    <button onclick="submitDeposit()" class="auth-btn">Confirm Deposit</button>
+  </div>
+</div>
+<!-- Withdrawal Modal -->
+<div id="withdraw-modal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <span class="close-btn" onclick="closeWithdrawModal()">&times;</span>
+    <h3>Request Withdrawal</h3>
+    
+    <div class="form-group">
+      <label for="with-phone">Mobile Money Number</label>
+      <input type="text" id="with-phone" placeholder="e.g. 0771234567" required />
+    </div>
+
+    <div class="form-group">
+      <label for="with-network">Network</label>
+      <select id="with-network">
+        <option value="MTN">MTN Mobile Money</option>
+        <option value="AIRTEL">Airtel Money</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="with-amount">Amount (UGX)</label>
+      <input type="number" id="with-amount" placeholder="Min: 5,000" min="5000" required />
+    </div>
+
+    <p style="font-size: 0.85rem; color: #94a3b8; margin-top: -0.5rem; margin-bottom: 1rem;">
+      * A 3% withdrawal transaction fee applies.
+    </p>
+
+    <button onclick="submitWithdrawal()" class="auth-btn" style="background-color: #ef4444; color: #fff;">
+      Confirm Withdrawal
+    </button>
+  </div>
+</div>
+<!-- Toast Notification Container -->
+<div id="toast-container" class="toast-container"></div>
+</body>
+</html>

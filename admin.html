@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard - HUT 9</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="dashboard-body">
+
+  <nav class="navbar">
+    <div class="logo">HUT 9 - Admin Panel</div>
+    <div class="auth-controls">
+      <a href="dashboard.html" class="nav-btn">User Portal</a>
+      <button onclick="logoutUser()" class="btn-logout">Logout</button>
+    </div>
+  </nav>
+
+  <main class="dashboard-container" style="max-width: 1100px;">
+    
+    <!-- Admin Overview Stats -->
+    <section class="dashboard-stats">
+      <div class="stat-box">
+        <h4>Total Users</h4>
+        <p id="admin-total-users">0</p>
+      </div>
+      <div class="stat-box">
+        <h4>Pending Withdrawals</h4>
+        <p id="admin-pending-withdrawals">0</p>
+      </div>
+      <div class="stat-box">
+        <h4>Total System Balance</h4>
+        <p id="admin-total-balance">UGX 0</p>
+      </div>
+    </section>
+
+    <!-- Pending Withdrawals Management Table -->
+    <section class="admin-section" style="margin-top: 2rem;">
+      <h3 style="color: #00d8ff; margin-bottom: 1rem;">Pending Withdrawal Requests</h3>
+      <div class="table-responsive">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Phone</th>
+              <th>Network</th>
+              <th>Requested</th>
+              <th>Fee (3%)</th>
+              <th>Payout</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="withdrawal-table-body">
+            <tr>
+              <td colspan="7" style="text-align: center; color: #94a3b8;">No pending withdrawal requests.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="script.js"></script>
+  <script>
+    // Load admin dashboard data on page startup
+    document.addEventListener('DOMContentLoaded', fetchAdminData);
+
+    async function fetchAdminData() {
+      const token = localStorage.getItem('token');
+      try {
+        const response = await fetch('http://localhost:5000/api/admin/dashboard', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          document.getElementById('admin-total-users').textContent = data.totalUsers;
+          document.getElementById('admin-pending-withdrawals').textContent = data.pendingWithdrawals.length;
+          document.getElementById('admin-total-balance').textContent = `UGX ${data.totalSystemBalance.toLocaleString()}`;
+
+          renderWithdrawalsTable(data.pendingWithdrawals);
+        } else {
+          alert(data.message || 'Access denied.');
+          window.location.href = 'index.html';
+        }
+      } catch (err) {
+        console.error('Error fetching admin data:', err);
+      }
+    }
+
+    function renderWithdrawalsTable(withdrawals) {
+      const tbody = document.getElementById('withdrawal-table-body');
+      tbody.innerHTML = '';
+
+      if (withdrawals.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8;">No pending withdrawal requests.</td></tr>';
+        return;
+      }
+
+      withdrawals.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.username}</td>
+          <td>${item.phoneNumber}</td>
+          <td>${item.network}</td>
+          <td>UGX ${item.amount.toLocaleString()}</td>
+          <td>UGX ${item.fee.toLocaleString()}</td>
+          <td style="color: #00ffcc; font-weight: bold;">UGX ${item.netPayout.toLocaleString()}</td>
+          <td>
+            <button onclick="processWithdrawal('${item.id}', 'approve')" class="btn-action approve">Approve</button>
+            <button onclick="processWithdrawal('${item.id}', 'reject')" class="btn-action reject">Reject</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function processWithdrawal(id, action) {
+      const token = localStorage.getItem('token');
+      try {
+        const response = await fetch(`http://localhost:5000/api/admin/withdraw/${action}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ withdrawalId: id })
+        });
+        const data = await response.json();
+        alert(data.message);
+        fetchAdminData(); // Refresh UI
+      } catch (err) {
+        alert('Action failed.');
+      }
+    }
+  </script>
+  <!-- Toast Notification Container -->
+<div id="toast-container" class="toast-container"></div>
+</body>
+</html>

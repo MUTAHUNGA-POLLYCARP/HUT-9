@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HUT 9 - Digital Art & Visuals</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <nav class="navbar">
+    <div class="logo">HUT 9</div>
+
+    <div class="auth-controls">
+      <!-- Greeting display -->
+      <span id="user-greeting" style="display: none; color: #ffffff; margin-right: 15px;"></span>
+
+      <!-- User Balance -->
+      <span id="user-balance" style="color: #00ffcc; font-weight: bold; margin-right: 15px;">UGX 0</span>
+<!-- Auth Buttons -->
+      <a href="login.html" id="login-btn" class="nav-btn">Login</a>
+      <a href="register.html" id="signup-btn" class="nav-btn">Sign Up</a>
+      <button id="logout-btn" onclick="logoutUser()" style="display: none;">Logout</button>
+    </div>
+  </nav>
+</header>
+  <!-- Top Navbar -->
+  <header class="navbar"><!-- USER DASHBOARD & WALLET SECTION -->
+<section id="dashboard" class="container wallet-section">
+  <div class="wallet-card">
+    <h3>Account Wallet</h3>
+    <div class="balance-display">
+      <span class="label">Total Balance:</span>
+      <h2 id="wallet-balance">UGX 0</h2>
+    </div>
+    <div class="balance-display">
+      <span class="label">Estimated Daily Profit:</span>
+      <h4 id="daily-profit" class="profit-text">+ UGX 0 / day</h4>
+    </div>
+    
+    <div class="wallet-actions">
+      <button class="btn-deposit" onclick="openDepositModal()">Deposit</button>
+      <button class="btn-withdraw" onclick="openWithdrawModal()">Withdraw</button>
+    </div>
+  </div>
+</section>
+    <div class="logo">HUT <span>9</span></div>
+    <nav>
+      <a href="#gallery">Gallery</a>
+      <a href="#pricing">Subscriptions</a>
+    </nav>
+  </header>
+
+  <!-- Section 1: Hero Banner -->
+  <section class="hero">
+    <h1>Exclusive Digital Art & Visuals</h1>
+    <p>Unlock premium high-resolution images with flexible subscription plans.</p>
+  </section>
+
+  <!-- Section 2: Featured Gallery Content -->
+  <section id="gallery" class="container">
+    <h2 class="section-title">Featured Content</h2>
+    
+    <div class="gallery-grid">
+      <!-- Free Image Card -->
+<div class="card" onclick="openImagePreview('images/sample.jpg', 'Free Preview Image')">
+  <div class="badge-tag free">FREE ACCESS</div>
+  <img src="images/sample.jpg" alt="Free Preview Image">
+  <div class="card-body">
+    <h3>Free Preview Image</h3>
+    <p>Available to all visitors (Click to View).</p>
+  </div>
+</div>
+
+<!-- SMALL CARS TIER (UGX 35,000 to UGX 966,000 | 20% Profit/Month) -->
+<div class="card locked-card" onclick="buyMachine('Small Car Investment', 35000, 233, 30)">
+  <div class="badge-tag basic">20% MONTHLY RETURN</div>
+  <img src="images/small-car.jpg" alt="Small Car" class="blur-img">
+  <div class="card-body">
+    <h3>Small Car Investment</h3>
+    <p class="price-tag">Price: UGX 35,000</p>
+    <p>Est. Monthly Profit: UGX 7,000</p>
+  </div>
+</div>
+
+<div class="card locked-card" onclick="buyMachine('Small Car Max Tier', 966000, 6440, 30)">
+  <div class="badge-tag basic">20% MONTHLY RETURN</div>
+  <img src="images/small-car.jpg" alt="Small Car" class="blur-img">
+  <div class="card-body">
+    <h3>Small Car Max Tier</h3>
+    <p class="price-tag">Price: UGX 966,000</p>
+    <p>Est. Monthly Profit: UGX 193,200</p>
+  </div>
+</div>
+
+<!-- TOYOTA LANDCRUISER TIER (UGX 1.2M to UGX 2M | 30% Profit/Month) -->
+<div class="card locked-card" onclick="buyMachine('Toyota Landcruiser', 1200000, 12000, 30)">
+  <div class="badge-tag basic" style="background:#0284c7;">30% MONTHLY RETURN</div>
+  <img src="images/landcruiser.jpg" alt="Toyota Landcruiser" class="blur-img">
+  <div class="card-body">
+    <h3>Toyota Landcruiser</h3>
+    <p class="price-tag">Price: UGX 1,200,000</p>
+    <p>Est. Monthly Profit: UGX 360,000</p>
+  </div>
+</div>
+
+<!-- MERCEDES BENZ TIER (UGX 2.5M to UGX 3.2M | 38% Profit/Month) -->
+<div class="card locked-card" onclick="buyMachine('Mercedes-Benz VIP', 2500000, 31667, 30)">
+  <div class="badge-tag vip" style="background:#9333ea;">38% MONTHLY RETURN</div>
+  <img src="images/mercedes.jpg" alt="Mercedes Benz" class="blur-img">
+  <div class="card-body">
+    <h3>Mercedes-Benz VIP</h3>
+    <p class="price-tag">Price: UGX 2,500,000</p>
+    <p>Est. Monthly Profit: UGX 950,000</p>
+  </div>
+</div>
+
+<!-- HELICOPTER TIER (UGX 3.5M to UGX 4M | 45% Profit/Month) -->
+<div class="card locked-card" onclick="buyMachine('Helicopter Executive', 3500000, 52500, 30)">
+  <div class="badge-tag vip" style="background:#e11d48;">45% MONTHLY RETURN</div>
+  <img src="images/helicopter.jpg" alt="Helicopter" class="blur-img">
+  <div class="card-body">
+    <h3>Helicopter Executive</h3>
+    <p class="price-tag">Price: UGX 3,500,000</p>
+    <p>Est. Monthly Profit: UGX 1,575,000</p>
+  </div>
+</div>
+
+<!-- CARGO PLANE TIER (UGX 4.3M to UGX 5M | 50% Profit/Month) -->
+<div class="card locked-card" id="cargo-plane" onclick="buyMachine('Cargo Plane Ultimate', 5000000, 83333, 30)">
+  <div class="badge-tag vip" style="background:#f59e0b; color:#000;">50% MONTHLY RETURN</div>
+  <img src="images/cargoplane.jpg" alt="Cargo Plane" class="blur-img">
+  <div class="card-body">
+    <h3>Cargo Plane Ultimate</h3>
+    <p class="price-tag">Price: UGX 5,000,000</p>
+    <p>Est. Monthly Profit: UGX 2,500,000</p>
+  </div>
+</div>
+
+<!-- Basic Tier Locked Card -->
+<div class="card locked-card" id="basic-item" onclick="buyMachine('Basic Access', 10000, 333, 30)">
+  <div class="badge-tag basic">BASIC TIER</div>
+  <div class="lock-overlay" id="basic-lock">🔒 Click to Unlock</div>
+  <img src="images/sample.jpg" alt="Premium Content" class="blur-img" id="basic-img">
+  <div class="card-body">
+    <h3>Premium Landscape</h3>
+    <p id="basic-desc">Requires Basic Access or higher.</p>
+  </div>
+</div>
+
+<!-- VIP Tier Locked Card -->
+<div class="card locked-card" id="vip-item" onclick="buyMachine('VIP Access', 30000, 1000, 30)">
+  <div class="badge-tag vip">VIP TIER</div>
+  <div class="lock-overlay" id="vip-lock">🔒 VIP Only</div>
+  <img src="images/sample.jpg" alt="Ultra HD Content" class="blur-img" id="vip-img">
+  <div class="card-body">
+    <h3>Ultra HD Wallpapers</h3>
+    <p id="vip-desc">Requires VIP Plan.</p>
+  </div>
+</div>
+
+</div>
+</section>
+
+<!-- Section 3: Subscription Pricing Cards -->
+<section id="pricing" class="container">
+  <h2 class="section-title">Choose Your Plan</h2>
+  
+  <div class="pricing-grid">
+    
+    <!-- Basic Plan Card -->
+    <div class="price-card">
+      <h3>Basic Access</h3>
+      <div class="price">UGX 10,000 <span>/ month</span></div>
+      <ul class="features">
+        <li>✓ Standard HD Images</li>
+        <li>✓ Unlimited Downloads</li>
+        <li>✕ Commercial Usage</li>
+      </ul>
+      <button class="btn-subscribe" onclick="buyMachine('Basic Access', 10000, 333, 30)">Subscribe Now</button>
+    </div>
+
+    <!-- VIP Plan Card (Featured) -->
+    <div class="price-card featured">
+      <div class="popular-badge">Most Popular</div>
+      <h3>VIP Access</h3>
+      <div class="price">UGX 30,000 <span>/ month</span></div>
+      <ul class="features">
+        <li>✓ 4K Ultra HD Images</li>
+        <li>✓ Unlimited Downloads</li>
+        <li>✓ Commercial Usage Rights</li>
+      </ul>
+      <button class="btn-subscribe btn-highlight" onclick="buyMachine('VIP Access', 30000, 1000, 30)">Subscribe Now</button>
+    </div>
+
+  </div>
+</section>
+
+  <!-- MODAL 1: Image Lightbox Preview -->
+  <div id="image-modal" class="modal" onclick="closeImageModal()">
+    <span class="close-btn">&times;</span>
+    <img id="modal-img-display" src="" alt="Full Preview">
+    <p id="modal-img-caption"></p>
+  </div>
+
+  <!-- MODAL 2: Mobile Money Payment Pop-Up -->
+  <div id="payment-modal" class="modal">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closePaymentModal()">&times;</span>
+      <h3>Unlock Content</h3>
+      <p id="selected-plan-text" class="plan-summary">Plan: Basic Tier (UGX 10,000)</p>
+      
+      <form id="payment-form" onsubmit="processPayment(event)">
+        <label for="phone">Mobile Money Number:</label>
+        <input type="tel" id="phone" placeholder="e.g., 0770000000 or 0750000000" required pattern="[0-9]{10}">
+
+        <label for="provider">Select Network:</label>
+        <select id="provider" required>
+          <option value="mtn">MTN Mobile Money</option>
+          <option value="airtel">Airtel Money</option>
+        </select>
+
+        <button type="submit" class="btn-subscribe btn-highlight" style="margin-top: 15px;">Pay with Mobile Money</button>
+      </form>
+    </div>
+  </div>
+<!-- MODAL: DEPOSIT -->
+<div id="deposit-modal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" onclick="closeDepositModal()">&times;</span>
+    <h3>Deposit Funds</h3>
+    <p class="plan-summary">Add money to your account wallet</p>
+    
+    <form id="deposit-form" onsubmit="processDeposit(event)">
+      <label for="deposit-amount">Amount (UGX):</label>
+      <input type="number" id="deposit-amount" min="5000" placeholder="e.g. 50000" required>
+
+      <label for="deposit-phone">Mobile Money Number:</label>
+      <input type="tel" id="deposit-phone" placeholder="e.g., 0770000000" required pattern="[0-9]{10}">
+
+      <label for="deposit-provider">Select Network:</label>
+      <select id="deposit-provider" required>
+        <option value="mtn">MTN Mobile Money</option>
+        <option value="airtel">Airtel Money</option>
+      </select>
+
+      <button type="submit" class="btn-deposit" style="margin-top: 10px; width: 100%;">Confirm Deposit</button>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: WITHDRAW -->
+<div id="withdraw-modal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" onclick="closeWithdrawModal()">&times;</span>
+    <h3>Withdraw Funds</h3>
+    <p class="plan-summary">Transfer wallet balance to Mobile Money</p>
+    
+    <form id="withdraw-form" onsubmit="processWithdraw(event)">
+      <label for="withdraw-amount">Amount (UGX):</label>
+      <input type="number" id="withdraw-amount" min="5000" placeholder="e.g. 20000" required>
+
+      <label for="withdraw-phone">Mobile Money Number:</label>
+      <input type="tel" id="withdraw-phone" placeholder="e.g., 0770000000" required pattern="[0-9]{10}">
+
+      <label for="withdraw-provider">Select Network:</label>
+      <select id="withdraw-provider" required>
+        <option value="mtn">MTN Mobile Money</option>
+        <option value="airtel">Airtel Money</option>
+      </select>
+
+      <button type="submit" class="btn-withdraw" style="margin-top: 10px; width: 100%;">Request Withdrawal</button>
+    </form>
+  </div>
+</div>
+  <!-- Connect JavaScript Logic -->
+  <script src="script.js">
+    // Function called when user clicks subscribe on a tier
+async function subscribeToTier(tierId, price) {
+  try {
+    const response = await fetch('/api/subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ tierId: tierId, amount: price })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      // 1. Update the Wallet Balance in the UI immediately
+      const walletBalanceElement = document.getElementById('wallet-balance');
+      if (walletBalanceElement) {
+        walletBalanceElement.textContent = `$${data.newBalance.toFixed(2)}`;
+      }
+
+      // 2. Unlock the content visually on the page
+      const tierCard = document.getElementById(`tier-${tierId}`);
+      if (tierCard) {
+        tierCard.classList.add('unlocked');
+        
+        // Update status text/badge inside the card if present
+        const statusBadge = tierCard.querySelector('.status');
+        if (statusBadge) {
+          statusBadge.textContent = 'Unlocked';
+        }
+      }
+
+      alert(data.message || 'Subscription successful!');
+    } else {
+      alert(data.message || 'Transaction failed. Check your balance.');
+    }
+  } catch (error) {
+    console.error('Error during subscription:', error);
+    alert('Server connection error. Please try again.');
+  }
+}
+<!-- Navigation bar controls -->
+<nav class="navbar">
+  <div id="user-greeting" style="display: none;"></div>
+  <button id="login-btn" onclick="showLoginModal()">Login</button>
+  <button id="logout-btn" onclick="logoutUser()" style="display: none;">Logout</button>
+</nav>
+</script>
+<!-- Toast Notification Container -->
+<div id="toast-container" class="toast-container"></div>
+</body>
+</html>
+<div class="register-container">
