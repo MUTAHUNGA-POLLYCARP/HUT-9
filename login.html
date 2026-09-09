@@ -7,55 +7,73 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body class="auth-body">
+
   <div class="auth-container">
     <h2>Login to HUT 9</h2>
+    
     <form id="login-form">
       <div class="form-group">
         <label for="login-email">Email</label>
         <input type="email" id="login-email" name="email" placeholder="Enter email" required />
       </div>
+
       <div class="form-group">
         <label for="login-password">Password</label>
         <input type="password" id="login-password" name="password" placeholder="Enter password" required />
       </div>
+
       <button type="submit" class="auth-btn">Log In</button>
     </form>
+
     <p class="auth-switch">Don't have an account? <a href="register.html">Sign Up</a></p>
-    <script src="script.js"></script>
-<script>
-  document.getElementById('login-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-
-    try {
-      const response = await fetch('http://localhost:5000/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Save auth data to localStorage
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-
-        alert('Login successful!');
-       
-        window.location.href = 'dashboard.html'; // Redirect to homepage
-      } else {
-        alert(data.message || 'Login failed.');
-      }
-    } catch (err) {
-      alert('Error connecting to server.');
-    }
-  });
-</script>
   </div>
+
   <!-- Toast Notification Container -->
-<div id="toast-container" class="toast-container"></div>
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="script.js"></script>
+  <script>
+    // Dynamic Base URL handler for seamless local & production deployments
+    const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+      ? 'http://localhost:5000' 
+      : '';
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          // Store token and serialized user details locally
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+
+          alert('Login successful!');
+          
+          // Redirect based on user role (Admin vs Regular User)
+          if (data.user && data.user.isAdmin) {
+            window.location.href = 'admin.html';
+          } else {
+            window.location.href = 'index.html';
+          }
+        } else {
+          alert(data.message || 'Login failed.');
+        }
+      } catch (err) {
+        console.error('Login request error:', err);
+        alert('Error connecting to server. Please try again.');
+      }
+    });
+  </script>
 </body>
 </html>

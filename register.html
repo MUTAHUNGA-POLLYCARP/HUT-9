@@ -25,37 +25,46 @@
       <button type="submit" class="auth-btn">Sign Up</button>
     </form>
     <p class="auth-switch">Already have an account? <a href="login.html">Log In</a></p>
-    <script src="script.js"></script>
-<script>
-  document.getElementById('register-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const username = document.getElementById('username').value;
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
-
-    try {
-      const response = await fetch('http://localhost:5000/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, password })
-      });
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        alert(data.message);
-        window.location.href = 'login.html'; // Redirect to login
-      } else {
-        alert(data.message || 'Registration failed.');
-      }
-    } catch (err) {
-      alert('Error connecting to server.');
-    }
-  });
-</script>
   </div>
+
   <!-- Toast Notification Container -->
-<div id="toast-container" class="toast-container"></div>
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Scripts -->
+  <script src="script.js"></script>
+  <script>
+    document.getElementById('register-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = document.getElementById('username').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      // Automatically route requests to Express port 5000 if running under Live Server (port 5500/5501)
+      const API_URL = (window.location.port === '5500' || window.location.port === '5501')
+        ? 'http://localhost:5000/api/register'
+        : '/api/register';
+
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, email, password })
+        });
+
+        const data = await response.json();
+        
+        if (response.ok) {
+          alert(data.message || 'Registration successful!');
+          window.location.href = 'login.html';
+        } else {
+          alert(data.message || 'Registration failed.');
+        }
+      } catch (err) {
+        console.error('Registration Error:', err);
+        alert('Error connecting to server. Make sure node server.js is running.');
+      }
+    });
+  </script>
 </body>
 </html>

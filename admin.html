@@ -61,25 +61,39 @@
 
   </main>
 
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
   <script src="script.js"></script>
   <script>
-    // Load admin dashboard data on page startup
+    // Relative API endpoint for seamless local and production deployments
+    const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+      ? 'http://localhost:5000' 
+      : '';
+
     document.addEventListener('DOMContentLoaded', fetchAdminData);
 
     async function fetchAdminData() {
       const token = localStorage.getItem('token');
+      if (!token) {
+        window.location.href = 'index.html';
+        return;
+      }
+
       try {
-        const response = await fetch('http://localhost:5000/api/admin/dashboard', {
+        const response = await fetch(`${API_BASE_URL}/api/admin/dashboard`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
 
         if (response.ok) {
-          document.getElementById('admin-total-users').textContent = data.totalUsers;
-          document.getElementById('admin-pending-withdrawals').textContent = data.pendingWithdrawals.length;
-          document.getElementById('admin-total-balance').textContent = `UGX ${data.totalSystemBalance.toLocaleString()}`;
+          document.getElementById('admin-total-users').textContent = data.totalUsers || 0;
+          document.getElementById('admin-pending-withdrawals').textContent = data.pendingWithdrawals ? data.pendingWithdrawals.length : 0;
+          
+          const totalBalance = data.totalSystemBalance || 0;
+          document.getElementById('admin-total-balance').textContent = `UGX ${totalBalance.toLocaleString()}`;
 
-          renderWithdrawalsTable(data.pendingWithdrawals);
+          renderWithdrawalsTable(data.pendingWithdrawals || []);
         } else {
           alert(data.message || 'Access denied.');
           window.location.href = 'index.html';
@@ -89,27 +103,41 @@
       }
     }
 
+    // Helper function to safely escape text to prevent XSS
+    function escapeHTML(str) {
+      return String(str || '').replace(/[&<>'"]/g, 
+        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+      );
+    }
+
     function renderWithdrawalsTable(withdrawals) {
       const tbody = document.getElementById('withdrawal-table-body');
       tbody.innerHTML = '';
 
-      if (withdrawals.length === 0) {
+      if (!withdrawals || withdrawals.length === 0) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8;">No pending withdrawal requests.</td></tr>';
         return;
       }
 
       withdrawals.forEach(item => {
         const tr = document.createElement('tr');
+        
+        // Handles both Mongoose '_id' and virtual 'id'
+        const id = item._id || item.id;
+        const amount = item.amount || 0;
+        const fee = item.fee || 0;
+        const netPayout = item.netPayout || 0;
+
         tr.innerHTML = `
-          <td>${item.username}</td>
-          <td>${item.phoneNumber}</td>
-          <td>${item.network}</td>
-          <td>UGX ${item.amount.toLocaleString()}</td>
-          <td>UGX ${item.fee.toLocaleString()}</td>
-          <td style="color: #00ffcc; font-weight: bold;">UGX ${item.netPayout.toLocaleString()}</td>
+          <td>${escapeHTML(item.username)}</td>
+          <td>${escapeHTML(item.phoneNumber)}</td>
+          <td>${escapeHTML(item.network)}</td>
+          <td>UGX ${amount.toLocaleString()}</td>
+          <td>UGX ${fee.toLocaleString()}</td>
+          <td style="color: #00ffcc; font-weight: bold;">UGX ${netPayout.toLocaleString()}</td>
           <td>
-            <button onclick="processWithdrawal('${item.id}', 'approve')" class="btn-action approve">Approve</button>
-            <button onclick="processWithdrawal('${item.id}', 'reject')" class="btn-action reject">Reject</button>
+            <button onclick="processWithdrawal('${id}', 'approve')" class="btn-action approve">Approve</button>
+            <button onclick="processWithdrawal('${id}', 'reject')" class="btn-action reject">Reject</button>
           </td>
         `;
         tbody.appendChild(tr);
@@ -119,7 +147,7 @@
     async function processWithdrawal(id, action) {
       const token = localStorage.getItem('token');
       try {
-        const response = await fetch(`http://localhost:5000/api/admin/withdraw/${action}`, {
+        const response = await fetch(`${API_BASE_URL}/api/admin/withdraw/${action}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -129,13 +157,11 @@
         });
         const data = await response.json();
         alert(data.message);
-        fetchAdminData(); // Refresh UI
+        fetchAdminData();
       } catch (err) {
         alert('Action failed.');
       }
     }
   </script>
-  <!-- Toast Notification Container -->
-<div id="toast-container" class="toast-container"></div>
 </body>
 </html>

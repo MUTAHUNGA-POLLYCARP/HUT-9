@@ -10,10 +10,10 @@
 
   <!-- Dashboard Navigation -->
   <nav class="navbar">
-    <div class="logo">HUT 9</div>
+    <div class="logo">HUT <span>9</span></div>
     <div class="auth-controls">
       <span id="user-greeting">Welcome!</span>
-      <button onclick="logoutUser()" class="btn-logout">Logout</button>
+      <button onclick="logoutUser()" id="logout-btn">Logout</button>
     </div>
   </nav>
 
@@ -27,9 +27,9 @@
         <p class="label">Total Balance:</p>
         <h3 id="dash-balance">UGX 0</h3>
         <p class="label">Estimated Daily Profit:</p>
-        <p class="profit" id="dash-profit">+ UGX 0 / day</p>
+        <p class="profit-text" id="daily-profit">+ UGX 0 / day</p>
       </div>
-      <div class="button-group">
+      <div class="wallet-actions">
         <button class="btn-deposit" onclick="handleDeposit()">Deposit</button>
         <button class="btn-withdraw" onclick="handleWithdraw()">Withdraw</button>
       </div>
@@ -47,14 +47,137 @@
       </div>
     </section>
 
+    <!-- Available Investment Tiers Grid -->
+    <section style="margin-top: 3rem;">
+      <h2 class="section-title">Available Machines & Tiers</h2>
+      <div class="gallery-grid">
+        
+        <!-- Tier 1 -->
+        <div class="card locked-card" id="tier1" data-tier-id="tier1" data-price="10000">
+          <span class="badge-tag free">Tier 1</span>
+          <img src="images/machine1.jpg" alt="Machine 1" class="blur-img locked" />
+          <div class="card-body">
+            <h3>Basic Machine</h3>
+            <div class="earnings-info">
+              <div>Monthly Return (30 Days): <span class="highlight-green">40%</span></div>
+              <div>Estimated Daily Earnings: <span class="highlight-green">UGX 133 / day</span></div>
+            </div>
+            <p class="price">UGX 10,000 <span>/ 30 Days</span></p>
+            <button class="btn-subscribe" onclick="subscribeToTier('tier1', 10000)">Unlock / Invest</button>
+          </div>
+        </div>
+
+        <!-- Tier 2 -->
+        <div class="card locked-card" id="tier2" data-tier-id="tier2" data-price="50000">
+          <span class="badge-tag basic">Tier 2</span>
+          <img src="images/machine2.jpg" alt="Machine 2" class="blur-img locked" />
+          <div class="card-body">
+            <h3>Standard Machine</h3>
+            <div class="earnings-info">
+              <div>Monthly Return (30 Days): <span class="highlight-green">40%</span></div>
+              <div>Estimated Daily Earnings: <span class="highlight-green">UGX 666 / day</span></div>
+            </div>
+            <p class="price">UGX 50,000 <span>/ 30 Days</span></p>
+            <button class="btn-subscribe" onclick="subscribeToTier('tier2', 50000)">Unlock / Invest</button>
+          </div>
+        </div>
+
+        <!-- Tier 3 -->
+        <div class="card locked-card" id="tier3" data-tier-id="tier3" data-price="100000">
+          <span class="badge-tag vip">Tier 3</span>
+          <img src="images/machine3.jpg" alt="Machine 3" class="blur-img locked" />
+          <div class="card-body">
+            <h3>Pro Machine</h3>
+            <div class="earnings-info">
+              <div>Monthly Return (30 Days): <span class="highlight-green">40%</span></div>
+              <div>Estimated Daily Earnings: <span class="highlight-green">UGX 1,333 / day</span></div>
+            </div>
+            <p class="price">UGX 100,000 <span>/ 30 Days</span></p>
+            <button class="btn-subscribe" onclick="subscribeToTier('tier3', 100000)">Unlock / Invest</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
   </main>
+
+  <!-- Deposit Modal -->
+  <div id="deposit-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeDepositModal()">&times;</span>
+      <h3>Deposit via Mobile Money</h3>
+      
+      <div class="form-group">
+        <label for="dep-phone">Phone Number</label>
+        <input type="text" id="dep-phone" placeholder="e.g. 0771234567" required />
+      </div>
+
+      <div class="form-group">
+        <label for="dep-network">Network</label>
+        <select id="dep-network">
+          <option value="MTN">MTN Mobile Money</option>
+          <option value="AIRTEL">Airtel Money</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="dep-amount">Amount (UGX)</label>
+        <input type="number" id="dep-amount" placeholder="e.g. 10000" min="500" required />
+      </div>
+
+      <button onclick="submitDeposit()" class="btn-subscribe" style="width: 100%; max-width: 100%; margin-top: 1rem;">Confirm Deposit</button>
+    </div>
+  </div>
+
+  <!-- Withdrawal Modal -->
+  <div id="withdraw-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <span class="close-btn" onclick="closeWithdrawModal()">&times;</span>
+      <h3>Request Withdrawal</h3>
+      
+      <div class="form-group">
+        <label for="with-phone">Mobile Money Number</label>
+        <input type="text" id="with-phone" placeholder="e.g. 0771234567" required />
+      </div>
+
+      <div class="form-group">
+        <label for="with-network">Network</label>
+        <select id="with-network">
+          <option value="MTN">MTN Mobile Money</option>
+          <option value="AIRTEL">Airtel Money</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="with-amount">Amount (UGX)</label>
+        <input type="number" id="with-amount" placeholder="Min: 5,000" min="5000" required />
+      </div>
+
+      <p style="font-size: 0.85rem; color: #94a3b8; margin-top: -0.5rem; margin-bottom: 1rem;">
+        * A 3% withdrawal transaction fee applies.
+      </p>
+
+      <button onclick="submitWithdrawal()" class="btn-withdraw" style="width: 100%; padding: 0.8rem;">
+        Confirm Withdrawal
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
 
   <script src="script.js"></script>
   <script>
-    // Protect page: Redirect to login if user token is missing
-    document.addEventListener('DOMContentLoaded', () => {
-      const user = JSON.parse(localStorage.getItem('user'));
+    document.addEventListener('DOMContentLoaded', async () => {
       const token = localStorage.getItem('token');
+      let user = null;
+
+      try {
+        user = JSON.parse(localStorage.getItem('user'));
+      } catch (err) {
+        console.error('Failed to parse cached user data', err);
+      }
 
       if (!token || !user) {
         alert('Please log in first.');
@@ -62,72 +185,26 @@
         return;
       }
 
-      // Populate user info
-      document.getElementById('user-greeting').textContent = `Hello, ${user.username}!`;
-      document.getElementById('dash-balance').textContent = `UGX ${user.balance || 0}`;
+      // Populate local user details
+      const userName = user.username || localStorage.getItem('userName') || 'User';
+      document.getElementById('user-greeting').textContent = `Hello, ${userName}!`;
+
+      // Fetch live user stats & active plan details from server
+      const userId = user.id || user._id || localStorage.getItem('userId');
+      if (userId) {
+        try {
+          const res = await fetch(`${API_URL}/api/user-status/${userId}`);
+          const data = await res.json();
+
+          if (data.success) {
+            document.getElementById('active-count').textContent = data.activeMachinesCount || (data.unlockedTiers ? data.unlockedTiers.length : 0);
+            document.getElementById('total-earnings').textContent = `UGX ${Number(data.totalEarned || 0).toLocaleString()}`;
+          }
+        } catch (err) {
+          console.error('Failed to fetch dashboard summary stats:', err);
+        }
+      }
     });
   </script>
-  <!-- Deposit Modal -->
-<div id="deposit-modal" class="modal" style="display: none;">
-  <div class="modal-content">
-    <span class="close-btn" onclick="closeDepositModal()">&times;</span>
-    <h3>Deposit via Mobile Money</h3>
-    
-    <div class="form-group">
-      <label for="dep-phone">Phone Number</label>
-      <input type="text" id="dep-phone" placeholder="e.g. 0771234567" required />
-    </div>
-
-    <div class="form-group">
-      <label for="dep-network">Network</label>
-      <select id="dep-network">
-        <option value="MTN">MTN Mobile Money</option>
-        <option value="AIRTEL">Airtel Money</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="dep-amount">Amount (UGX)</label>
-      <input type="number" id="dep-amount" placeholder="e.g. 10000" min="500" required />
-    </div>
-
-    <button onclick="submitDeposit()" class="auth-btn">Confirm Deposit</button>
-  </div>
-</div>
-<!-- Withdrawal Modal -->
-<div id="withdraw-modal" class="modal" style="display: none;">
-  <div class="modal-content">
-    <span class="close-btn" onclick="closeWithdrawModal()">&times;</span>
-    <h3>Request Withdrawal</h3>
-    
-    <div class="form-group">
-      <label for="with-phone">Mobile Money Number</label>
-      <input type="text" id="with-phone" placeholder="e.g. 0771234567" required />
-    </div>
-
-    <div class="form-group">
-      <label for="with-network">Network</label>
-      <select id="with-network">
-        <option value="MTN">MTN Mobile Money</option>
-        <option value="AIRTEL">Airtel Money</option>
-      </select>
-    </div>
-
-    <div class="form-group">
-      <label for="with-amount">Amount (UGX)</label>
-      <input type="number" id="with-amount" placeholder="Min: 5,000" min="5000" required />
-    </div>
-
-    <p style="font-size: 0.85rem; color: #94a3b8; margin-top: -0.5rem; margin-bottom: 1rem;">
-      * A 3% withdrawal transaction fee applies.
-    </p>
-
-    <button onclick="submitWithdrawal()" class="auth-btn" style="background-color: #ef4444; color: #fff;">
-      Confirm Withdrawal
-    </button>
-  </div>
-</div>
-<!-- Toast Notification Container -->
-<div id="toast-container" class="toast-container"></div>
 </body>
 </html>

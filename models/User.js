@@ -3,35 +3,42 @@ const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
-    required: true,
+    required: [true, 'Username is required'],
     trim: true
   },
   email: {
     type: String,
-    required: true,
+    required: [true, 'Email is required'],
     unique: true,
-    lowercase: true
+    lowercase: true,
+    trim: true
   },
   password: {
     type: String,
-    required: true
+    required: [true, 'Password is required']
   },
   balance: {
     type: Number,
-    default: 0
+    default: 0,
+    min: [0, 'Balance cannot be negative']
   },
   role: {
     type: String,
-    default: 'user' // 'user' or 'admin'
+    enum: ['user', 'admin'],
+    default: 'user'
+  },
+  unlockedTiers: {
+    type: [String],
+    default: []
   },
   investments: [
     {
-      machineName: String,
-      price: Number,
-      dailyProfit: Number,
-      startDate: Date,
-      expiryDate: Date,
-      active: Boolean
+      machineName: { type: String },
+      price: { type: Number },
+      dailyProfit: { type: Number, default: 0 },
+      startDate: { type: Date, default: Date.now },
+      expiryDate: { type: Date },
+      active: { type: Boolean, default: true }
     }
   ],
   createdAt: {
