@@ -1,4 +1,4 @@
-// Force Google DNS to bypass local Windows/ISP SRV blocking
+// Force Google DNS to bypass local Windows/ISP SRV blocking[cite: 13]
 const dns = require('dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
@@ -24,6 +24,9 @@ const PESAPAL_BASE_URL = process.env.PESAPAL_ENV === 'live'
   : 'https://cyb3r.pesapal.com/pesapalv3';
 
 let cachedIpnId = process.env.PESAPAL_IPN_ID || null;
+
+// In-memory tracking guard to prevent duplicate deposit crediting on page refreshes
+const processedOrders = new Set();
 
 // ==========================================
 // 1. MIDDLEWARE & SECURITY CONFIGURATION
@@ -139,7 +142,26 @@ async function getPesapalNotificationId(token) {
     }
     throw new Error('No IPN ID returned by Pesapal.');
   } catch (error) {
-    console.error('Pesapal IPN Registration Error:', error.response ? error.response.data : error.message);
+    console.warn('Pesapal IPN Registration note (checking existing IPNs):', error.response ? error.response.data : error.message);
+    
+    // Fallback: If registration fails because the URL is already registered, fetch existing IPNs from Pesapal
+    try {
+      const listResponse = await axios.get(
+        `${PESAPAL_BASE_URL}/api/URLSetup/GetRegisteredIPN`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (listResponse.data && Array.isArray(listResponse.data)) {
+        const existing = listResponse.data.find(i => i.url && i.url.includes('hut9.onrender.com'));
+        if (existing && existing.ipn_id) {
+          cachedIpnId = existing.ipn_id;
+          console.log('✅ Retrieved existing Pesapal IPN ID:', cachedIpnId);
+          return cachedIpnId;
+        }
+      }
+    } catch (listErr) {
+      console.error('Failed to fetch existing IPNs:', listErr.message);
+    }
+
     throw new Error('Failed to obtain Pesapal IPN Notification ID.');
   }
 }
@@ -258,13 +280,28 @@ app.get('/api/user-status/:userId', async (req, res) => {
   }
 });
 
-// Check Pesapal Payment Status Directly
+// Check Pesapal Payment Status Directly (With duplicate protection guard)
 app.get('/api/pesapal/check-status', async (req, res) => {
   try {
     const { orderTrackingId, userId } = req.query;
 
     if (!orderTrackingId) {
       return res.status(400).json({ success: false, message: 'Order tracking ID is required.' });
+    }
+
+    // Check if this transaction was already processed and credited
+    if (processedOrders.has(orderTrackingId)) {
+      const targetUserId = userId || req.query.merchantRef?.split('_')[2];
+      let user = null;
+      if (targetUserId) {
+        user = await User.findById(targetUserId).catch(() => null);
+      }
+      return res.status(200).json({
+        success: true,
+        status: 'Completed',
+        newBalance: user ? user.balance : 0,
+        message: 'Payment already processed.'
+      });
     }
 
     const pesapalToken = await getPesapalAuthToken();
@@ -288,9 +325,12 @@ app.get('/api/pesapal/check-status', async (req, res) => {
       }
 
       if (user) {
-        // Prevent duplicate crediting
         user.balance = (user.balance || 0) + Number(paymentData.amount);
         await user.save();
+        
+        // Mark order as processed to block duplicate reloads
+        processedOrders.add(orderTrackingId);
+
         return res.status(200).json({
           success: true,
           status: 'Completed',
@@ -373,13 +413,22 @@ app.post('/api/deposit', async (req, res) => {
   }
 });
 
-// Pesapal IPN Webhook Listener
+// Pesapal IPN Webhook Listener (With duplicate protection guard)
 app.get('/api/pesapal/ipn', async (req, res) => {
   try {
     const { OrderTrackingId, OrderMerchantReference } = req.query;
 
     if (!OrderTrackingId) {
       return res.status(400).send('Missing tracking ID.');
+    }
+
+    if (processedOrders.has(OrderTrackingId)) {
+      return res.status(200).json({
+        orderNotificationType: 'IPNCHANGE',
+        orderTrackingId: OrderTrackingId,
+        orderMerchantReference: OrderMerchantReference,
+        status: 200
+      });
     }
 
     const pesapalToken = await getPesapalAuthToken();
@@ -400,6 +449,7 @@ app.get('/api/pesapal/ipn', async (req, res) => {
       if (targetUser) {
         targetUser.balance = (targetUser.balance || 0) + Number(paymentData.amount);
         await targetUser.save();
+        processedOrders.add(OrderTrackingId);
         console.log(`✅ Credited UGX ${paymentData.amount} to user ${targetUser.username}`);
       }
     }
@@ -439,7 +489,6 @@ app.post('/api/withdraw', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Insufficient wallet balance.' });
     }
 
-    // Deduct user balance and persist withdrawal in MongoDB
     user.balance = (user.balance || 0) - Number(amount);
     await user.save();
 
