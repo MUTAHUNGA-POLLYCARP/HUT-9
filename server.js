@@ -379,7 +379,7 @@ app.get('/api/pesapal/check-status', async (req, res) => {
   }
 });
 
-// Pesapal Deposit Request (Fixed Phone Normalization for Direct USSD Push)
+// Pesapal Deposit Request
 app.post('/api/deposit', async (req, res) => {
   try {
     const { userId, phoneNumber, network, amount } = req.body;
@@ -397,7 +397,7 @@ app.post('/api/deposit', async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    // Format phone number to international 256 format for Uganda Mobile Money USSD Push
+    // Standardize Ugandan Mobile Money Number Format (256...)
     let formattedPhone = phoneNumber.toString().trim().replace(/[^0-9]/g, '');
     if (formattedPhone.startsWith('0')) {
       formattedPhone = '256' + formattedPhone.substring(1);
@@ -437,6 +437,7 @@ app.post('/api/deposit', async (req, res) => {
         success: true,
         redirect_url: response.data.redirect_url,
         orderTrackingId: response.data.order_tracking_id,
+        merchantReference: merchantReference,
         message: 'Redirecting to Pesapal Mobile Money payment portal...'
       });
     }
@@ -452,7 +453,7 @@ app.post('/api/deposit', async (req, res) => {
   }
 });
 
-// Unified Pesapal IPN Webhook Listener (Handles both POST and GET)
+// Unified Pesapal IPN Webhook Listener
 const handleIpnCallback = async (req, res) => {
   try {
     const OrderTrackingId = req.body.OrderTrackingId || req.query.OrderTrackingId || req.query.orderTrackingId;
