@@ -338,9 +338,9 @@ function closePesapalIframeModal() {
 async function submitDeposit() {
   const user = JSON.parse(localStorage.getItem('user')) || {};
   const userId = user.id || user._id || localStorage.getItem('userId');
-  const phoneNumber = document.getElementById('dep-phone')?.value || document.getElementById('deposit-phone')?.value;
-  const network = document.getElementById('dep-network')?.value || document.getElementById('deposit-provider')?.value || 'MTN';
-  const amount = document.getElementById('dep-amount')?.value || document.getElementById('deposit-amount')?.value;
+  const phoneNumber = document.getElementById('dep-phone')?.value;
+  const network = document.getElementById('dep-network')?.value || 'MTN';
+  const amount = document.getElementById('dep-amount')?.value;
 
   if (!userId) {
     showToast('Please log in first.', 'error');
@@ -358,7 +358,7 @@ async function submitDeposit() {
   }
 
   try {
-    showToast('Connecting to Pesapal Mobile Money...', 'success');
+    showToast('Initiating Mobile Money Prompt...', 'success');
 
     const response = await fetch(`${API_URL}/api/deposit`, {
       method: 'POST',
@@ -381,7 +381,7 @@ async function submitDeposit() {
         iframeModal.style.display = 'flex';
       }
 
-      // Start automatic polling to check payment completion
+      // Start automatic polling to verify payment status
       if (orderTrackingId) {
         startPaymentStatusPolling(orderTrackingId, userId);
       }

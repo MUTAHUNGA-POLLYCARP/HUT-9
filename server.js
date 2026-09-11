@@ -379,18 +379,30 @@ app.get('/api/pesapal/check-status', async (req, res) => {
   }
 });
 
-// Pesapal Deposit Request
+// Pesapal Deposit Request (Fixed Phone Normalization for Direct USSD Push)
 app.post('/api/deposit', async (req, res) => {
   try {
-    const { userId, phoneNumber, amount } = req.body;
+    const { userId, phoneNumber, network, amount } = req.body;
 
-    if (!userId || !amount || amount < 500) {
+    if (!userId || !amount || Number(amount) < 500) {
       return res.status(400).json({ success: false, message: 'Minimum deposit is UGX 500.' });
+    }
+
+    if (!phoneNumber) {
+      return res.status(400).json({ success: false, message: 'Phone number is required.' });
     }
 
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    // Format phone number to international 256 format for Uganda Mobile Money USSD Push
+    let formattedPhone = phoneNumber.toString().trim().replace(/[^0-9]/g, '');
+    if (formattedPhone.startsWith('0')) {
+      formattedPhone = '256' + formattedPhone.substring(1);
+    } else if (!formattedPhone.startsWith('256')) {
+      formattedPhone = '256' + formattedPhone;
     }
 
     const pesapalToken = await getPesapalAuthToken();
@@ -405,8 +417,8 @@ app.post('/api/deposit', async (req, res) => {
       callback_url: `${APP_URL}/dashboard.html?userId=${user._id}`,
       notification_id: notificationId,
       billing_address: {
-        email_address: user.email,
-        phone_number: phoneNumber,
+        email_address: user.email || `${user.username.toLowerCase()}@hut9.com`,
+        phone_number: formattedPhone,
         first_name: user.username,
         last_name: 'Member',
         country_code: 'UG'
