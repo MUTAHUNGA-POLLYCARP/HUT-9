@@ -1,4 +1,4 @@
-// Force Google DNS to bypass local Windows/ISP SRV blocking[cite: 13]
+// Force Google DNS to bypass local Windows/ISP SRV blocking
 const dns = require('dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
@@ -18,15 +18,13 @@ const User = require('./models/User');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'hut9_super_secret_jwt_key_123';
+const APP_URL = process.env.APP_URL || 'https://hut9.onrender.com';
 
 const PESAPAL_BASE_URL = process.env.PESAPAL_ENV === 'live' 
   ? 'https://pay.pesapal.com/v3' 
   : 'https://cyb3r.pesapal.com/pesapalv3';
 
 let cachedIpnId = process.env.PESAPAL_IPN_ID || null;
-
-// In-memory tracking guard to prevent duplicate deposit crediting on page refreshes
-const processedOrders = new Set();
 
 // ==========================================
 // 1. MIDDLEWARE & SECURITY CONFIGURATION
@@ -66,7 +64,7 @@ app.use('/api/', globalLimiter);
 app.use('/api/login', authLimiter);
 app.use('/api/register', authLimiter);
 
-// Optional JWT Guard Middleware (Falls back to userId from body)
+// Optional JWT Guard Middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -92,7 +90,7 @@ mongoose.connect(MONGO_URI, { family: 4 })
   .then(() => console.log('✅ Connected to MongoDB Atlas / Local DB successfully!'))
   .catch(err => console.error('❌ MongoDB connection error:', err));
 
-// MongoDB Withdrawal Schema for Data Persistence
+// MongoDB Withdrawal Schema
 const withdrawalSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   phoneNumber: { type: String, required: true },
@@ -103,6 +101,18 @@ const withdrawalSchema = new mongoose.Schema({
 });
 
 const Withdrawal = mongoose.models.Withdrawal || mongoose.model('Withdrawal', withdrawalSchema);
+
+// MongoDB Transaction Record Schema (Prevents double crediting)
+const transactionSchema = new mongoose.Schema({
+  orderTrackingId: { type: String, required: true, unique: true },
+  merchantReference: { type: String },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  amount: { type: Number, required: true },
+  status: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Transaction = mongoose.models.Transaction || mongoose.model('Transaction', transactionSchema);
 
 // ==========================================
 // 3. PESAPAL INTEGRATION UTILITIES
@@ -127,8 +137,8 @@ async function getPesapalNotificationId(token) {
     const response = await axios.post(
       `${PESAPAL_BASE_URL}/api/URLSetup/RegisterIPN`,
       {
-        url: 'https://hut9.onrender.com/api/pesapal/ipn',
-        ipn_notification_type: 'GET'
+        url: `${APP_URL}/api/pesapal/ipn`,
+        ipn_notification_type: 'POST'
       },
       {
         headers: { Authorization: `Bearer ${token}` }
@@ -144,14 +154,13 @@ async function getPesapalNotificationId(token) {
   } catch (error) {
     console.warn('Pesapal IPN Registration note (checking existing IPNs):', error.response ? error.response.data : error.message);
     
-    // Fallback: If registration fails because the URL is already registered, fetch existing IPNs from Pesapal
     try {
       const listResponse = await axios.get(
         `${PESAPAL_BASE_URL}/api/URLSetup/GetRegisteredIPN`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (listResponse.data && Array.isArray(listResponse.data)) {
-        const existing = listResponse.data.find(i => i.url && i.url.includes('hut9.onrender.com'));
+        const existing = listResponse.data.find(i => i.url && i.url.includes('/api/pesapal/ipn'));
         if (existing && existing.ipn_id) {
           cachedIpnId = existing.ipn_id;
           console.log('✅ Retrieved existing Pesapal IPN ID:', cachedIpnId);
@@ -166,16 +175,73 @@ async function getPesapalNotificationId(token) {
   }
 }
 
+// Helper to Process and Credit User Wallet
+async function creditUserDeposit(orderTrackingId, merchantReference) {
+  try {
+    const existingTx = await Transaction.findOne({ orderTrackingId });
+    if (existingTx && existingTx.status === 'Completed') {
+      console.log(`Transaction ${orderTrackingId} already credited.`);
+      return { status: 'Completed', userId: existingTx.userId };
+    }
+
+    const token = await getPesapalAuthToken();
+    const statusRes = await axios.get(
+      `${PESAPAL_BASE_URL}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    const paymentData = statusRes.data;
+
+    if (paymentData.payment_status_description === 'Completed') {
+      let targetUser = null;
+
+      if (merchantReference) {
+        const parts = merchantReference.split('_');
+        const extractedId = parts[2];
+
+        if (extractedId) {
+          targetUser = await User.findById(extractedId).catch(() => null);
+          if (!targetUser) {
+            const users = await User.find();
+            targetUser = users.find(u => u._id.toString().endsWith(extractedId));
+          }
+        }
+      }
+
+      if (targetUser) {
+        targetUser.balance = (targetUser.balance || 0) + Number(paymentData.amount);
+        await targetUser.save();
+
+        await Transaction.create({
+          orderTrackingId,
+          merchantReference,
+          userId: targetUser._id,
+          amount: Number(paymentData.amount),
+          status: 'Completed'
+        });
+
+        console.log(`✅ Successfully credited UGX ${paymentData.amount} to user ${targetUser.username}`);
+        return { status: 'Completed', user: targetUser, balance: targetUser.balance };
+      } else {
+        console.warn(`⚠️ Payment received for order ${orderTrackingId}, but no matching user was found.`);
+        return { status: 'User Not Found' };
+      }
+    }
+
+    return { status: paymentData.payment_status_description || 'Pending' };
+  } catch (error) {
+    console.error('Error processing deposit crediting:', error.message);
+    throw error;
+  }
+}
+
 // ==========================================
 // 4. AUTHENTICATION ENDPOINTS
 // ==========================================
 app.post('/api/register', async (req, res) => {
   try {
     if (mongoose.connection.readyState !== 1) {
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Database connection error. Ensure MongoDB is running.' 
-      });
+      return res.status(500).json({ success: false, message: 'Database connection error.' });
     }
 
     const { username, email, password } = req.body;
@@ -280,69 +346,30 @@ app.get('/api/user-status/:userId', async (req, res) => {
   }
 });
 
-// Check Pesapal Payment Status Directly (With duplicate protection guard)
+// Check Pesapal Payment Status
 app.get('/api/pesapal/check-status', async (req, res) => {
   try {
-    const { orderTrackingId, userId } = req.query;
+    const { orderTrackingId, userId, merchantRef } = req.query;
 
     if (!orderTrackingId) {
       return res.status(400).json({ success: false, message: 'Order tracking ID is required.' });
     }
 
-    // Check if this transaction was already processed and credited
-    if (processedOrders.has(orderTrackingId)) {
-      const targetUserId = userId || req.query.merchantRef?.split('_')[2];
-      let user = null;
-      if (targetUserId) {
-        user = await User.findById(targetUserId).catch(() => null);
-      }
+    const result = await creditUserDeposit(orderTrackingId, merchantRef || `HUT9_0_${userId}`);
+
+    if (result.status === 'Completed') {
+      const user = await User.findById(userId || result.userId);
       return res.status(200).json({
         success: true,
         status: 'Completed',
-        newBalance: user ? user.balance : 0,
-        message: 'Payment already processed.'
+        newBalance: user ? user.balance : result.balance,
+        message: 'Payment completed and wallet updated successfully.'
       });
-    }
-
-    const pesapalToken = await getPesapalAuthToken();
-    const statusResponse = await axios.get(
-      `${PESAPAL_BASE_URL}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`,
-      { headers: { Authorization: `Bearer ${pesapalToken}` } }
-    );
-
-    const paymentData = statusResponse.data;
-
-    if (paymentData.payment_status_description === 'Completed') {
-      const targetUserId = userId || req.query.merchantRef?.split('_')[2];
-      let user = null;
-
-      if (targetUserId) {
-        user = await User.findById(targetUserId).catch(() => null);
-        if (!user) {
-          const users = await User.find();
-          user = users.find(u => u._id.toString().endsWith(targetUserId));
-        }
-      }
-
-      if (user) {
-        user.balance = (user.balance || 0) + Number(paymentData.amount);
-        await user.save();
-        
-        // Mark order as processed to block duplicate reloads
-        processedOrders.add(orderTrackingId);
-
-        return res.status(200).json({
-          success: true,
-          status: 'Completed',
-          newBalance: user.balance,
-          message: 'Payment completed and wallet updated successfully.'
-        });
-      }
     }
 
     res.status(200).json({
       success: false,
-      status: paymentData.payment_status_description || 'Pending',
+      status: result.status,
       message: 'Payment pending or incomplete.'
     });
 
@@ -368,14 +395,14 @@ app.post('/api/deposit', async (req, res) => {
 
     const pesapalToken = await getPesapalAuthToken();
     const notificationId = await getPesapalNotificationId(pesapalToken);
-    const orderTrackingId = `HUT9_${Date.now()}_${user._id.toString().slice(-6)}`;
+    const merchantReference = `HUT9_${Date.now()}_${user._id.toString()}`;
 
     const payload = {
-      id: orderTrackingId,
+      id: merchantReference,
       currency: 'UGX',
       amount: Number(amount),
       description: `HUT 9 Wallet Deposit for ${user.username}`,
-      callback_url: `https://hut9.onrender.com/dashboard.html?userId=${user._id}`,
+      callback_url: `${APP_URL}/dashboard.html?userId=${user._id}`,
       notification_id: notificationId,
       billing_address: {
         email_address: user.email,
@@ -413,46 +440,17 @@ app.post('/api/deposit', async (req, res) => {
   }
 });
 
-// Pesapal IPN Webhook Listener (With duplicate protection guard)
-app.get('/api/pesapal/ipn', async (req, res) => {
+// Unified Pesapal IPN Webhook Listener (Handles both POST and GET)
+const handleIpnCallback = async (req, res) => {
   try {
-    const { OrderTrackingId, OrderMerchantReference } = req.query;
+    const OrderTrackingId = req.body.OrderTrackingId || req.query.OrderTrackingId || req.query.orderTrackingId;
+    const OrderMerchantReference = req.body.OrderMerchantReference || req.query.OrderMerchantReference || req.query.orderMerchantReference;
 
     if (!OrderTrackingId) {
-      return res.status(400).send('Missing tracking ID.');
+      return res.status(400).json({ success: false, message: 'Missing OrderTrackingId' });
     }
 
-    if (processedOrders.has(OrderTrackingId)) {
-      return res.status(200).json({
-        orderNotificationType: 'IPNCHANGE',
-        orderTrackingId: OrderTrackingId,
-        orderMerchantReference: OrderMerchantReference,
-        status: 200
-      });
-    }
-
-    const pesapalToken = await getPesapalAuthToken();
-    const statusResponse = await axios.get(
-      `${PESAPAL_BASE_URL}/api/Transactions/GetTransactionStatus?orderTrackingId=${OrderTrackingId}`,
-      { headers: { Authorization: `Bearer ${pesapalToken}` } }
-    );
-
-    const paymentData = statusResponse.data;
-
-    if (paymentData.payment_status_description === 'Completed') {
-      const parts = OrderMerchantReference ? OrderMerchantReference.split('_') : [];
-      const userIdShort = parts[2];
-
-      const users = await User.find();
-      const targetUser = users.find(u => u._id.toString().endsWith(userIdShort));
-
-      if (targetUser) {
-        targetUser.balance = (targetUser.balance || 0) + Number(paymentData.amount);
-        await targetUser.save();
-        processedOrders.add(OrderTrackingId);
-        console.log(`✅ Credited UGX ${paymentData.amount} to user ${targetUser.username}`);
-      }
-    }
+    await creditUserDeposit(OrderTrackingId, OrderMerchantReference);
 
     res.status(200).json({
       orderNotificationType: 'IPNCHANGE',
@@ -461,10 +459,13 @@ app.get('/api/pesapal/ipn', async (req, res) => {
       status: 200
     });
   } catch (error) {
-    console.error('Pesapal IPN Error:', error);
+    console.error('Pesapal IPN Error:', error.message);
     res.status(500).send('IPN processing failed.');
   }
-});
+};
+
+app.post('/api/pesapal/ipn', handleIpnCallback);
+app.get('/api/pesapal/ipn', handleIpnCallback);
 
 // Persistent Withdrawal Endpoint
 app.post('/api/withdraw', authenticateToken, async (req, res) => {

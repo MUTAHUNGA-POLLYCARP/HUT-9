@@ -6,6 +6,7 @@ const API_URL = window.location.hostname === 'localhost' || window.location.host
   : window.location.origin; // Dynamically uses the current origin (https://hut-9.onrender.com)
 
 let userSubscriptions = []; 
+let statusPollingInterval = null;
 
 let userWallet = JSON.parse(localStorage.getItem('hut9_wallet')) || {
   balance: 0,
@@ -310,7 +311,7 @@ window.subscribeToTier = async function(tierId, price) {
 };
 
 // ==========================================
-// 6. DEPOSIT & WITHDRAWAL HANDLERS
+// 6. DEPOSIT & WITHDRAWAL HANDLERS (EMBEDDED PESAPAL)
 // ==========================================
 function openDepositModal() {
   const modal = document.getElementById('deposit-modal');
@@ -324,6 +325,14 @@ function handleDeposit() {
 function closeDepositModal() {
   const modal = document.getElementById('deposit-modal');
   if (modal) modal.style.display = 'none';
+}
+
+function closePesapalIframeModal() {
+  const modal = document.getElementById('pesapal-iframe-modal');
+  const iframe = document.getElementById('pesapal-iframe');
+  if (iframe) iframe.src = '';
+  if (modal) modal.style.display = 'none';
+  if (statusPollingInterval) clearInterval(statusPollingInterval);
 }
 
 async function submitDeposit() {
@@ -359,10 +368,23 @@ async function submitDeposit() {
 
     const data = await response.json();
     const redirectUrl = data.redirect_url || data.redirectUrl;
+    const orderTrackingId = data.orderTrackingId;
 
     if (data.success && redirectUrl) {
       closeDepositModal();
-      window.location.href = redirectUrl;
+
+      // Open embedded modal frame overlay
+      const iframeModal = document.getElementById('pesapal-iframe-modal');
+      const iframe = document.getElementById('pesapal-iframe');
+      if (iframe && iframeModal) {
+        iframe.src = redirectUrl;
+        iframeModal.style.display = 'flex';
+      }
+
+      // Start automatic polling to check payment completion
+      if (orderTrackingId) {
+        startPaymentStatusPolling(orderTrackingId, userId);
+      }
     } else {
       showToast(data.message || 'Deposit failed.', 'error');
     }
@@ -370,6 +392,32 @@ async function submitDeposit() {
     console.error('Deposit network error:', err);
     showToast('Error connecting to server.', 'error');
   }
+}
+
+function startPaymentStatusPolling(orderTrackingId, userId) {
+  if (statusPollingInterval) clearInterval(statusPollingInterval);
+
+  statusPollingInterval = setInterval(async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/pesapal/check-status?orderTrackingId=${orderTrackingId}&userId=${userId}`);
+      const data = await response.json();
+
+      if (data.success && data.status === 'Completed') {
+        clearInterval(statusPollingInterval);
+        closePesapalIframeModal();
+        showToast('Payment received! Wallet balance updated.', 'success');
+
+        const user = JSON.parse(localStorage.getItem('user')) || {};
+        user.balance = data.newBalance;
+        localStorage.setItem('user', JSON.stringify(user));
+
+        renderWallet();
+        await syncUserDataAndCheckUnlocks();
+      }
+    } catch (err) {
+      console.error('Polling payment status error:', err);
+    }
+  }, 4000); // Check status every 4 seconds
 }
 
 function openWithdrawModal() {
@@ -440,6 +488,7 @@ async function submitWithdrawal() {
 // Expose Deposit / Withdraw functions globally
 window.openDepositModal = openDepositModal;
 window.closeDepositModal = closeDepositModal;
+window.closePesapalIframeModal = closePesapalIframeModal;
 window.submitDeposit = submitDeposit;
 window.openWithdrawModal = openWithdrawModal;
 window.closeWithdrawModal = closeWithdrawModal;
