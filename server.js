@@ -482,7 +482,7 @@ const handleIpnCallback = async (req, res) => {
 app.post('/api/pesapal/ipn', handleIpnCallback);
 app.get('/api/pesapal/ipn', handleIpnCallback);
 
-// Persistent Withdrawal Endpoint
+// Persistent Withdrawal Endpoint (UNTOUCHED)
 app.post('/api/withdraw', authenticateToken, async (req, res) => {
   try {
     const { userId, phoneNumber, network, amount } = req.body;
@@ -524,6 +524,76 @@ app.post('/api/withdraw', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Withdrawal Server Error:', error);
     res.status(500).json({ success: false, message: 'Server error during withdrawal processing.' });
+  }
+});
+
+// ==========================================
+// NEW: ADMIN WITHDRAWAL MANAGEMENT ENDPOINTS
+// ==========================================
+
+// Fetch all pending withdrawal requests for admin dashboard
+app.get('/api/admin/withdrawals/pending', async (req, res) => {
+  try {
+    const pendingWithdrawals = await Withdrawal.find({ status: 'Pending' })
+      .populate('userId', 'username email balance')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      data: pendingWithdrawals
+    });
+  } catch (error) {
+    console.error('Admin Fetch Withdrawals Error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch pending withdrawals.' });
+  }
+});
+
+// Manually process (Approve or Reject) a withdrawal request
+app.post('/api/admin/withdrawals/process', async (req, res) => {
+  try {
+    const { withdrawalId, action } = req.body;
+
+    if (!withdrawalId || !['APPROVE', 'REJECT'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'Valid withdrawalId and action (APPROVE or REJECT) are required.' });
+    }
+
+    const withdrawal = await Withdrawal.findById(withdrawalId);
+    if (!withdrawal) {
+      return res.status(404).json({ success: false, message: 'Withdrawal request not found.' });
+    }
+
+    if (withdrawal.status !== 'Pending') {
+      return res.status(400).json({ success: false, message: `Withdrawal has already been marked as ${withdrawal.status}.` });
+    }
+
+    if (action === 'APPROVE') {
+      withdrawal.status = 'Completed';
+      await withdrawal.save();
+
+      return res.status(200).json({
+        success: true,
+        message: `Withdrawal for UGX ${withdrawal.amount.toLocaleString()} marked as APPROVED. You can now send funds manually via Mobile Money.`
+      });
+    }
+
+    if (action === 'REJECT') {
+      withdrawal.status = 'Rejected';
+      await withdrawal.save();
+
+      // Refund the deducted funds back to the user's account balance
+      await User.findByIdAndUpdate(withdrawal.userId, {
+        $inc: { balance: withdrawal.amount }
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: `Withdrawal REJECTED. UGX ${withdrawal.amount.toLocaleString()} refunded back to user balance.`
+      });
+    }
+
+  } catch (error) {
+    console.error('Admin Process Withdrawal Error:', error);
+    res.status(500).json({ success: false, message: 'Server error processing withdrawal.' });
   }
 });
 

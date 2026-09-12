@@ -16,6 +16,7 @@
       <div class="nav-links">
         <a href="#gallery">Gallery</a>
         <a href="#dashboard">Wallet</a>
+        <a href="#admin-withdrawals-section">Admin Panel</a>
       </div>
 
       <div class="auth-controls">
@@ -169,6 +170,43 @@
     </div>
   </section>
 
+  <!-- ========================================== -->
+  <!-- NEW: ADMIN WITHDRAWAL MANAGEMENT SECTION  -->
+  <!-- ========================================== -->
+  <section id="admin-withdrawals-section" class="container" style="margin-top: 40px; margin-bottom: 40px;">
+    <div style="background: #1e293b; color: #ffffff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: #00ffcc;">Ongoing Withdrawal Requests (Admin)</h2>
+        <button onclick="fetchOngoingWithdrawals()" style="background: #00ffcc; color: #0f172a; border: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; cursor: pointer;">
+          Refresh Requests
+        </button>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; color: #f8fafc;">
+          <thead>
+            <tr style="border-bottom: 2px solid #334155; color: #94a3b8; text-transform: uppercase; font-size: 13px;">
+              <th style="padding: 12px;">Date</th>
+              <th style="padding: 12px;">User / Email</th>
+              <th style="padding: 12px;">Phone Number</th>
+              <th style="padding: 12px;">Network</th>
+              <th style="padding: 12px;">Amount</th>
+              <th style="padding: 12px;">Status</th>
+              <th style="padding: 12px; text-align: center;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="admin-withdrawals-tbody">
+            <tr>
+              <td colspan="7" style="padding: 20px; text-align: center; color: #94a3b8;">
+                Click "Refresh Requests" to check ongoing withdrawals...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- Modals -->
   <div id="image-modal" class="modal" onclick="closeImageModal()">
     <span class="close-btn">&times;</span>
@@ -224,5 +262,82 @@
 
   <!-- Global Script -->
   <script src="script.js"></script>
+
+  <!-- ========================================== -->
+  <!-- NEW: ADMIN WITHDRAWALS CONTROLLER SCRIPT   -->
+  <!-- ========================================== -->
+  <script>
+    async function fetchOngoingWithdrawals() {
+      const tbody = document.getElementById('admin-withdrawals-tbody');
+      tbody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; color: #94a3b8;">Loading ongoing requests...</td></tr>';
+
+      try {
+        const response = await fetch('/api/admin/withdrawals/pending');
+        const result = await response.json();
+
+        if (!result.success || !result.data || result.data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; color: #94a3b8;">No ongoing withdrawal requests found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = result.data.map(item => {
+          const userLabel = item.userId ? (item.userId.username || item.userId.email) : 'Unknown User';
+          const formattedDate = new Date(item.createdAt).toLocaleString();
+          const amountFormatted = Number(item.amount).toLocaleString();
+
+          return `
+            <tr style="border-bottom: 1px solid #334155;">
+              <td style="padding: 12px; font-size: 13px;">${formattedDate}</td>
+              <td style="padding: 12px; font-weight: bold;">${userLabel}</td>
+              <td style="padding: 12px; color: #00ffcc; font-weight: bold;">${item.phoneNumber}</td>
+              <td style="padding: 12px;">${item.network}</td>
+              <td style="padding: 12px; font-size: 15px; font-weight: bold; color: #f59e0b;">UGX ${amountFormatted}</td>
+              <td style="padding: 12px;"><span style="background: #3b82f6; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${item.status}</span></td>
+              <td style="padding: 12px; text-align: center;">
+                <button onclick="handleWithdrawalAction('${item._id}', 'APPROVE')" style="background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; margin-right: 5px;">
+                  Approve
+                </button>
+                <button onclick="handleWithdrawalAction('${item._id}', 'REJECT')" style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">
+                  Reject
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (error) {
+        console.error('Error loading withdrawals:', error);
+        tbody.innerHTML = '<tr><td colspan="7" style="padding: 20px; text-align: center; color: #ef4444;">Failed to load withdrawal requests. Please try again.</td></tr>';
+      }
+    }
+
+    async function handleWithdrawalAction(withdrawalId, action) {
+      const confirmMsg = action === 'APPROVE' 
+        ? 'Are you sure you want to APPROVE this withdrawal? (Ensure you send funds manually via Mobile Money)' 
+        : 'Are you sure you want to REJECT this withdrawal? (This will refund the money back to user wallet)';
+
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const response = await fetch('/api/admin/withdrawals/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ withdrawalId, action })
+        });
+
+        const result = await response.json();
+        alert(result.message);
+        fetchOngoingWithdrawals(); // Refresh the table automatically
+      } catch (error) {
+        console.error('Error processing withdrawal:', error);
+        alert('Failed to process withdrawal action. Check server logs.');
+      }
+    }
+
+    // Automatically load pending requests when page loads
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchOngoingWithdrawals();
+    });
+  </script>
 </body>
 </html>
