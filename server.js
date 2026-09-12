@@ -64,22 +64,32 @@ app.use('/api/', globalLimiter);
 app.use('/api/login', authLimiter);
 app.use('/api/register', authLimiter);
 
-// Optional JWT Guard Middleware
+// JWT Guard Middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token || token === 'undefined' || token === 'null') {
-    return next(); 
+    return res.status(401).json({ success: false, message: 'Authentication token required.' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (!err && user) {
-      req.user = user;
+    if (err || !user) {
+      return res.status(403).json({ success: false, message: 'Invalid or expired token.' });
     }
+    req.user = user;
     next();
   });
 };
+
+// Authorization Middleware for Admin Access
+function verifyAdmin(req, res, next) {
+  // Ensure req.user is attached from authentication middleware
+  if (req.user && req.user.role === 'admin') {
+    return next();
+  }
+  return res.status(403).json({ success: false, message: 'Access denied: Admin privileges required.' });
+}
 
 // ==========================================
 // 2. DATABASE CONNECTION & SCHEMAS
@@ -96,7 +106,7 @@ const withdrawalSchema = new mongoose.Schema({
   phoneNumber: { type: String, required: true },
   network: { type: String, required: true },
   amount: { type: Number, required: true },
-  status: { type: String, enum: ['Pending', 'Completed', 'Rejected'], default: 'Pending' },
+  status: { type: String, enum: ['Pending', 'Approved', 'Rejected'], default: 'Pending' },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -198,7 +208,7 @@ async function creditUserDeposit(orderTrackingId, merchantReference, fallbackUse
 
       if (merchantReference) {
         const parts = merchantReference.split('_');
-        const extractedId = parts[parts.length - 1]; // Robust extraction of userId
+        const extractedId = parts[parts.length - 1];
 
         if (extractedId && mongoose.Types.ObjectId.isValid(extractedId)) {
           targetUser = await User.findById(extractedId);
@@ -482,7 +492,7 @@ const handleIpnCallback = async (req, res) => {
 app.post('/api/pesapal/ipn', handleIpnCallback);
 app.get('/api/pesapal/ipn', handleIpnCallback);
 
-// Persistent Withdrawal Endpoint (UNTOUCHED)
+// Persistent Withdrawal Endpoint
 app.post('/api/withdraw', authenticateToken, async (req, res) => {
   try {
     const { userId, phoneNumber, network, amount } = req.body;
@@ -528,72 +538,57 @@ app.post('/api/withdraw', authenticateToken, async (req, res) => {
 });
 
 // ==========================================
-// NEW: ADMIN WITHDRAWAL MANAGEMENT ENDPOINTS
+// ADMIN WITHDRAWAL MANAGEMENT ENDPOINTS
 // ==========================================
 
-// Fetch all pending withdrawal requests for admin dashboard
-app.get('/api/admin/withdrawals/pending', async (req, res) => {
+// GET pending withdrawals (Admin Only)
+app.get('/api/admin/withdrawals', authenticateToken, verifyAdmin, async (req, res) => {
   try {
-    const pendingWithdrawals = await Withdrawal.find({ status: 'Pending' })
+    const pendingRequests = await Withdrawal.find({ status: 'Pending' })
       .populate('userId', 'username email balance')
       .sort({ createdAt: -1 });
-
-    res.status(200).json({
-      success: true,
-      data: pendingWithdrawals
-    });
+    res.json({ success: true, withdrawals: pendingRequests });
   } catch (error) {
-    console.error('Admin Fetch Withdrawals Error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch pending withdrawals.' });
+    res.status(500).json({ success: false, message: 'Server error fetching requests.' });
   }
 });
 
-// Manually process (Approve or Reject) a withdrawal request
-app.post('/api/admin/withdrawals/process', async (req, res) => {
+// POST Approve request (Admin Only)
+app.post('/api/admin/withdrawals/:id/approve', authenticateToken, verifyAdmin, async (req, res) => {
   try {
-    const { withdrawalId, action } = req.body;
+    const request = await Withdrawal.findById(req.params.id);
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found.' });
 
-    if (!withdrawalId || !['APPROVE', 'REJECT'].includes(action)) {
-      return res.status(400).json({ success: false, message: 'Valid withdrawalId and action (APPROVE or REJECT) are required.' });
-    }
+    request.status = 'Approved';
+    await request.save();
 
-    const withdrawal = await Withdrawal.findById(withdrawalId);
-    if (!withdrawal) {
-      return res.status(404).json({ success: false, message: 'Withdrawal request not found.' });
-    }
+    // Trigger payment processing / payout logic here if applicable
 
-    if (withdrawal.status !== 'Pending') {
-      return res.status(400).json({ success: false, message: `Withdrawal has already been marked as ${withdrawal.status}.` });
-    }
-
-    if (action === 'APPROVE') {
-      withdrawal.status = 'Completed';
-      await withdrawal.save();
-
-      return res.status(200).json({
-        success: true,
-        message: `Withdrawal for UGX ${withdrawal.amount.toLocaleString()} marked as APPROVED. You can now send funds manually via Mobile Money.`
-      });
-    }
-
-    if (action === 'REJECT') {
-      withdrawal.status = 'Rejected';
-      await withdrawal.save();
-
-      // Refund the deducted funds back to the user's account balance
-      await User.findByIdAndUpdate(withdrawal.userId, {
-        $inc: { balance: withdrawal.amount }
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: `Withdrawal REJECTED. UGX ${withdrawal.amount.toLocaleString()} refunded back to user balance.`
-      });
-    }
-
+    res.json({ success: true, message: 'Withdrawal request approved.' });
   } catch (error) {
-    console.error('Admin Process Withdrawal Error:', error);
-    res.status(500).json({ success: false, message: 'Server error processing withdrawal.' });
+    res.status(500).json({ success: false, message: 'Server error approving request.' });
+  }
+});
+
+// POST Reject request (Admin Only)
+app.post('/api/admin/withdrawals/:id/reject', authenticateToken, verifyAdmin, async (req, res) => {
+  try {
+    const request = await Withdrawal.findById(req.params.id);
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found.' });
+
+    request.status = 'Rejected';
+    await request.save();
+
+    // Refund user balance if funds were deducted upon initial request
+    const user = await User.findById(request.userId);
+    if (user) {
+      user.balance += request.amount;
+      await user.save();
+    }
+
+    res.json({ success: true, message: 'Withdrawal request rejected and user balance refunded.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error rejecting request.' });
   }
 });
 

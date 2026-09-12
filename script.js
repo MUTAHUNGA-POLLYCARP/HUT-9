@@ -29,6 +29,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   await handlePesapalReturnCallback();
   await syncUserDataAndCheckUnlocks();
 
+  // Run admin dashboard initialization if logged in
+  const user = JSON.parse(localStorage.getItem('user'));
+  if (user) {
+    initDashboard(user);
+  }
+
   const registerForm = document.getElementById('registerForm');
   if (registerForm) {
     registerForm.addEventListener('submit', handleRegisterSubmit);
@@ -372,8 +378,6 @@ async function submitDeposit() {
 
     if (data.success && redirectUrl) {
       closeDepositModal();
-
-      // Direct redirection allows proper execution of Pesapal's Mobile Money PIN prompt on mobile
       window.location.href = redirectUrl;
     } else {
       showToast(data.message || 'Deposit failed.', 'error');
@@ -510,3 +514,96 @@ function showToast(message, type = 'success', duration = 4000) {
     });
   }, duration);
 }
+
+// ==========================================
+// 8. ADMIN WITHDRAWAL MANAGEMENT
+// ==========================================
+
+// Run when loading the user dashboard data
+function initDashboard(user) {
+  // Check if current logged in user is an administrator
+  if (user && user.role === 'admin') {
+    const adminSection = document.getElementById('admin-withdrawals-section');
+    if (adminSection) {
+      adminSection.style.display = 'block';
+      fetchPendingWithdrawals();
+    }
+  }
+}
+
+// Fetch all pending withdrawal requests for admin
+async function fetchPendingWithdrawals() {
+  try {
+    const res = await fetch(`${API_URL}/api/admin/withdrawals`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}` // pass token or session
+      }
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      renderAdminWithdrawalsTable(data.withdrawals);
+    }
+  } catch (err) {
+    console.error('Error fetching withdrawal requests:', err);
+  }
+}
+
+// Render records into the table
+function renderAdminWithdrawalsTable(withdrawals) {
+  const tbody = document.getElementById('admin-withdrawals-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  if (!withdrawals || withdrawals.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7">No pending withdrawal requests.</td></tr>';
+    return;
+  }
+
+  withdrawals.forEach(req => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${new Date(req.createdAt).toLocaleString()}</td>
+      <td><strong>${req.username || req.userEmail || 'Unknown User'}</strong></td>
+      <td style="color: #00f2fe;">${req.phoneNumber}</td>
+      <td>${req.network}</td>
+      <td style="color: #ffb703;">UGX ${req.amount}</td>
+      <td><span class="badge badge-pending">${req.status}</span></td>
+      <td>
+        <button class="btn-approve" onclick="handleWithdrawalAction('${req._id}', 'approve')">Approve</button>
+        <button class="btn-reject" onclick="handleWithdrawalAction('${req._id}', 'reject')">Reject</button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+// Handle Approve / Reject actions
+async function handleWithdrawalAction(requestId, action) {
+  if (!confirm(`Are you sure you want to ${action} this request?`)) return;
+
+  try {
+    const res = await fetch(`${API_URL}/api/admin/withdrawals/${requestId}/${action}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      }
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      alert(`Request ${action}d successfully!`);
+      fetchPendingWithdrawals(); // Refresh table list
+    } else {
+      alert(data.message || 'Action failed.');
+    }
+  } catch (err) {
+    console.error(`Error during ${action}:`, err);
+  }
+}
+
+// Expose admin functions globally for click handlers
+window.initDashboard = initDashboard;
+window.fetchPendingWithdrawals = fetchPendingWithdrawals;
+window.handleWithdrawalAction = handleWithdrawalAction;
