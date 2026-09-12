@@ -3,7 +3,7 @@
 // ==========================================
 const API_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:5000'
-  : window.location.origin; // Dynamically uses the current origin (https://hut-9.onrender.com)
+  : window.location.origin;
 
 let userSubscriptions = []; 
 let statusPollingInterval = null;
@@ -210,13 +210,14 @@ async function syncUserDataAndCheckUnlocks() {
 async function handlePesapalReturnCallback() {
   const urlParams = new URLSearchParams(window.location.search);
   const orderTrackingId = urlParams.get('OrderTrackingId') || urlParams.get('orderTrackingId');
+  const merchantReference = urlParams.get('OrderMerchantReference') || urlParams.get('orderMerchantReference');
   const user = JSON.parse(localStorage.getItem('user')) || {};
   const userId = user.id || user._id || localStorage.getItem('userId');
 
   if (orderTrackingId && userId) {
     try {
       showToast('Verifying payment with Pesapal...', 'success');
-      const response = await fetch(`${API_URL}/api/pesapal/check-status?orderTrackingId=${orderTrackingId}&userId=${userId}`);
+      const response = await fetch(`${API_URL}/api/pesapal/check-status?orderTrackingId=${orderTrackingId}&userId=${userId}&merchantReference=${encodeURIComponent(merchantReference || '')}`);
       const data = await response.json();
 
       if (data.success) {
@@ -311,7 +312,7 @@ window.subscribeToTier = async function(tierId, price) {
 };
 
 // ==========================================
-// 6. DEPOSIT & WITHDRAWAL HANDLERS (EMBEDDED PESAPAL)
+// 6. DEPOSIT & WITHDRAWAL HANDLERS
 // ==========================================
 function openDepositModal() {
   const modal = document.getElementById('deposit-modal');
@@ -358,7 +359,7 @@ async function submitDeposit() {
   }
 
   try {
-    showToast('Initiating Mobile Money Prompt...', 'success');
+    showToast('Redirecting to Mobile Money Payment Gateway...', 'success');
 
     const response = await fetch(`${API_URL}/api/deposit`, {
       method: 'POST',
@@ -368,23 +369,12 @@ async function submitDeposit() {
 
     const data = await response.json();
     const redirectUrl = data.redirect_url || data.redirectUrl;
-    const orderTrackingId = data.orderTrackingId;
 
     if (data.success && redirectUrl) {
       closeDepositModal();
 
-      // Open embedded modal frame overlay
-      const iframeModal = document.getElementById('pesapal-iframe-modal');
-      const iframe = document.getElementById('pesapal-iframe');
-      if (iframe && iframeModal) {
-        iframe.src = redirectUrl;
-        iframeModal.style.display = 'flex';
-      }
-
-      // Start automatic polling to verify payment status
-      if (orderTrackingId) {
-        startPaymentStatusPolling(orderTrackingId, userId);
-      }
+      // Direct redirection allows proper execution of Pesapal's Mobile Money PIN prompt on mobile
+      window.location.href = redirectUrl;
     } else {
       showToast(data.message || 'Deposit failed.', 'error');
     }
@@ -394,12 +384,12 @@ async function submitDeposit() {
   }
 }
 
-function startPaymentStatusPolling(orderTrackingId, userId) {
+function startPaymentStatusPolling(orderTrackingId, userId, merchantReference) {
   if (statusPollingInterval) clearInterval(statusPollingInterval);
 
   statusPollingInterval = setInterval(async () => {
     try {
-      const response = await fetch(`${API_URL}/api/pesapal/check-status?orderTrackingId=${orderTrackingId}&userId=${userId}`);
+      const response = await fetch(`${API_URL}/api/pesapal/check-status?orderTrackingId=${orderTrackingId}&userId=${userId}&merchantReference=${encodeURIComponent(merchantReference || '')}`);
       const data = await response.json();
 
       if (data.success && data.status === 'Completed') {
@@ -417,7 +407,7 @@ function startPaymentStatusPolling(orderTrackingId, userId) {
     } catch (err) {
       console.error('Polling payment status error:', err);
     }
-  }, 4000); // Check status every 4 seconds
+  }, 4000);
 }
 
 function openWithdrawModal() {

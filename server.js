@@ -18,7 +18,7 @@ const User = require('./models/User');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'hut9_super_secret_jwt_key_123';
-const APP_URL = process.env.APP_URL || 'https://hut9.onrender.com';
+const APP_URL = process.env.APP_URL || 'https://hut-9.onrender.com';
 
 const PESAPAL_BASE_URL = process.env.PESAPAL_ENV === 'live' 
   ? 'https://pay.pesapal.com/v3' 
@@ -176,12 +176,13 @@ async function getPesapalNotificationId(token) {
 }
 
 // Helper to Process and Credit User Wallet
-async function creditUserDeposit(orderTrackingId, merchantReference) {
+async function creditUserDeposit(orderTrackingId, merchantReference, fallbackUserId) {
   try {
     const existingTx = await Transaction.findOne({ orderTrackingId });
     if (existingTx && existingTx.status === 'Completed') {
       console.log(`Transaction ${orderTrackingId} already credited.`);
-      return { status: 'Completed', userId: existingTx.userId };
+      const existingUser = await User.findById(existingTx.userId);
+      return { status: 'Completed', userId: existingTx.userId, balance: existingUser ? existingUser.balance : 0 };
     }
 
     const token = await getPesapalAuthToken();
@@ -192,35 +193,36 @@ async function creditUserDeposit(orderTrackingId, merchantReference) {
 
     const paymentData = statusRes.data;
 
-    if (paymentData.payment_status_description === 'Completed') {
+    if (paymentData.payment_status_description === 'Completed' || paymentData.status_code === 1) {
       let targetUser = null;
 
       if (merchantReference) {
         const parts = merchantReference.split('_');
-        const extractedId = parts[2];
+        const extractedId = parts[parts.length - 1]; // Robust extraction of userId
 
-        if (extractedId) {
-          targetUser = await User.findById(extractedId).catch(() => null);
-          if (!targetUser) {
-            const users = await User.find();
-            targetUser = users.find(u => u._id.toString().endsWith(extractedId));
-          }
+        if (extractedId && mongoose.Types.ObjectId.isValid(extractedId)) {
+          targetUser = await User.findById(extractedId);
         }
       }
 
+      if (!targetUser && fallbackUserId && mongoose.Types.ObjectId.isValid(fallbackUserId)) {
+        targetUser = await User.findById(fallbackUserId);
+      }
+
       if (targetUser) {
-        targetUser.balance = (targetUser.balance || 0) + Number(paymentData.amount);
+        const depositAmount = Number(paymentData.amount);
+        targetUser.balance = (targetUser.balance || 0) + depositAmount;
         await targetUser.save();
 
         await Transaction.create({
           orderTrackingId,
-          merchantReference,
+          merchantReference: merchantReference || `HUT9_${Date.now()}_${targetUser._id}`,
           userId: targetUser._id,
-          amount: Number(paymentData.amount),
+          amount: depositAmount,
           status: 'Completed'
         });
 
-        console.log(`✅ Successfully credited UGX ${paymentData.amount} to user ${targetUser.username}`);
+        console.log(`✅ Successfully credited UGX ${depositAmount} to user ${targetUser.username}`);
         return { status: 'Completed', user: targetUser, balance: targetUser.balance };
       } else {
         console.warn(`⚠️ Payment received for order ${orderTrackingId}, but no matching user was found.`);
@@ -349,13 +351,13 @@ app.get('/api/user-status/:userId', async (req, res) => {
 // Check Pesapal Payment Status
 app.get('/api/pesapal/check-status', async (req, res) => {
   try {
-    const { orderTrackingId, userId, merchantRef } = req.query;
+    const { orderTrackingId, userId, merchantReference } = req.query;
 
     if (!orderTrackingId) {
       return res.status(400).json({ success: false, message: 'Order tracking ID is required.' });
     }
 
-    const result = await creditUserDeposit(orderTrackingId, merchantRef || `HUT9_0_${userId}`);
+    const result = await creditUserDeposit(orderTrackingId, merchantReference, userId);
 
     if (result.status === 'Completed') {
       const user = await User.findById(userId || result.userId);
@@ -382,7 +384,7 @@ app.get('/api/pesapal/check-status', async (req, res) => {
 // Pesapal Deposit Request
 app.post('/api/deposit', async (req, res) => {
   try {
-    const { userId, phoneNumber, network, amount } = req.body;
+    const { userId, phoneNumber, amount } = req.body;
 
     if (!userId || !amount || Number(amount) < 500) {
       return res.status(400).json({ success: false, message: 'Minimum deposit is UGX 500.' });
@@ -463,7 +465,7 @@ const handleIpnCallback = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing OrderTrackingId' });
     }
 
-    await creditUserDeposit(OrderTrackingId, OrderMerchantReference);
+    await creditUserDeposit(OrderTrackingId, OrderMerchantReference, null);
 
     res.status(200).json({
       orderNotificationType: 'IPNCHANGE',
